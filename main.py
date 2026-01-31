@@ -46,7 +46,7 @@ class BluetoothServer:
         while self.running:
             try:
                 client_socket, client_info = self.server_socket.accept()
-                print(f"Accepted connection from {client_info}")j
+                print(f"Accepted connection from {client_info}")
                 
                 client_thread = threading.Thread(
                     target=self.handle_client, 
