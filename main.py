@@ -31,8 +31,8 @@ class BluetoothServer:
         try:
             self.server_socket = bluetooth.BluetoothSocket(bluetooth.RFCOMM)
             
-            # Use a specific port instead of ANY for better compatibility
-            port = 1
+            # Use ANY port for better compatibility with Windows
+            port = bluetooth.PORT_ANY
             
             self.server_socket.bind(("", port))
             self.server_socket.listen(1)
