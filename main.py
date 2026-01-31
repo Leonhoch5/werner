@@ -27,23 +27,27 @@ class BluetoothServer:
         
         port = self.server_socket.getsockname()[1]
         
-        # Advertise service
-        bluetooth.advertise_service(
-            self.server_socket, "RaspberryPiService",
-            service_id="1e0ca4ea-299d-4335-93eb-27fcfe7fa848",
-            service_classes=[bluetooth.SERIAL_PORT_CLASS],
-            profiles=[bluetooth.SERIAL_PORT_PROFILE]
-        )
+        try:
+            bluetooth.advertise_service(
+                self.server_socket, "RaspberryPiService",
+                service_id="1e0ca4ea-299d-4335-93eb-27fcfe7fa848",
+                service_classes=[bluetooth.SERIAL_PORT_CLASS],
+                profiles=[bluetooth.SERIAL_PORT_PROFILE]
+            )
+            print("Service advertised successfully")
+        except bluetooth.BluetoothError as e:
+            print(f"Warning: Could not advertise service: {e}")
+            print("Service will still work for direct connections")
         
         print(f"Waiting for connection on RFCOMM channel {port}")
+        print(f"Connect to this device using MAC address and channel {port}")
         self.running = True
         
         while self.running:
             try:
                 client_socket, client_info = self.server_socket.accept()
-                print(f"Accepted connection from {client_info}")
+                print(f"Accepted connection from {client_info}")j
                 
-                # Handle client in separate thread
                 client_thread = threading.Thread(
                     target=self.handle_client, 
                     args=(client_socket,)
