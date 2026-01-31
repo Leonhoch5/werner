@@ -40,6 +40,7 @@ import subprocess
 import time
 import threading
 import re
+import sys
 
 def monitor_bluetoothctl():
     """Monitor bluetoothctl output for pairing requests and PINs"""
@@ -74,62 +75,71 @@ def monitor_bluetoothctl():
             output = proc.stdout.readline()
             if output:
                 line = output.strip()
-                print(f"Bluetooth: {line}")
                 
-                # Look for pairing requests and PINs
-                if "Request confirmation" in line:
-                    print("\n" + "="*50)
-                    print("🔵 PAIRING REQUEST DETECTED!")
-                    print("="*50)
+                # Always show bluetoothctl output for debugging
+                if line and not line.startswith('['):
+                    print(f"BT: {line}")
                 
-                if "Passkey:" in line or "PIN:" in line:
-                    # Extract the PIN/passkey
-                    pin_match = re.search(r'(\d{6})', line)
-                    if pin_match:
-                        pin = pin_match.group(1)
-                        print("\n" + "="*50)
-                        print(f"🔑 PIN CODE: {pin}")
-                        print(f"🔑 ENTER THIS PIN ON WINDOWS: {pin}")
-                        print("="*50)
+                # Look for various PIN/passkey patterns
+                pin_patterns = [
+                    r'Passkey:\s*(\d+)',
+                    r'PIN:\s*(\d+)', 
+                    r'passkey\s+(\d+)',
+                    r'Confirm passkey\s+(\d+)',
+                    r'Request confirmation.*(\d{6})',
+                    r'(\d{6})'  # Any 6-digit number
+                ]
+                
+                for pattern in pin_patterns:
+                    match = re.search(pattern, line, re.IGNORECASE)
+                    if match:
+                        pin = match.group(1)
+                        print("\n" + "="*60)
+                        print(f"🔑🔑🔑 PIN FOUND: {pin} 🔑🔑🔑")
+                        print(f"🔑🔑🔑 ENTER THIS ON WINDOWS: {pin} 🔑🔑🔑")
+                        print("="*60)
                         print()
+                        sys.stdout.flush()
+                        break
                 
-                if "Confirm passkey" in line:
-                    print("\n" + "="*50) 
-                    print("✅ CONFIRMING PAIRING REQUEST")
-                    print("="*50)
+                # Look for pairing events
+                if any(keyword in line.lower() for keyword in ['pairing', 'pair']):
+                    if "request" in line.lower():
+                        print(f"\n🔵 PAIRING REQUEST: {line}")
+                        sys.stdout.flush()
+                    elif "successful" in line.lower():
+                        print(f"\n✅ SUCCESS: {line}")
+                        sys.stdout.flush()
+                    elif "failed" in line.lower():
+                        print(f"\n❌ FAILED: {line}")
+                        sys.stdout.flush()
+                
+                # Auto-confirm requests
+                if "confirm passkey" in line.lower() or "request confirmation" in line.lower():
+                    print("Auto-confirming pairing request...")
                     proc.stdin.write('yes\n')
                     proc.stdin.flush()
                 
-                if "Request PIN code" in line:
+                if "request pin code" in line.lower():
                     print("\n" + "="*50)
                     print("🔑 SENDING DEFAULT PIN: 0000")
-                    print("🔑 ENTER THIS PIN ON WINDOWS: 0000")
                     print("="*50)
                     proc.stdin.write('0000\n')
                     proc.stdin.flush()
-                
-                if "Pairing successful" in line:
-                    print("\n" + "="*50)
-                    print("✅ PAIRING SUCCESSFUL!")
-                    print("="*50)
-                    print()
-                
-                if "Failed to pair" in line:
-                    print("\n" + "="*50)
-                    print("❌ PAIRING FAILED!")
-                    print("="*50)
-                    print()
                     
     except KeyboardInterrupt:
         proc.terminate()
         print("Pairing monitor stopped")
+    except Exception as e:
+        print(f"Monitor error: {e}")
+        proc.terminate()
 
 if __name__ == "__main__":
     monitor_bluetoothctl()
 PYTHON_EOF
 
 # Start the pairing monitor in background
-echo "Starting pairing monitor..."
+echo "Starting enhanced pairing monitor..."
 python3 /tmp/pair_agent.py &
 PAIR_PID=$!
 
