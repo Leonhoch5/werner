@@ -78,25 +78,53 @@ class ESP32Controller:
         logger.info("Discovering services...")
         services = self.client.services
         
+        if not services:
+            logger.error("No services found!")
+            return
+        
+        # First, let's see ALL services and characteristics
         for service in services:
-            logger.info(f"Service: {service.uuid}")
-            
-            # Skip generic services, look for custom ones
-            if not str(service.uuid).startswith('0000'):
-                self.service_uuid = service.uuid
-                logger.info(f"  -> Using service: {service.uuid}")
+            logger.info(f"Service: {service.uuid} ({service.description})")
             
             for char in service.characteristics:
                 logger.info(f"  Characteristic: {char.uuid} (Properties: {char.properties})")
+        
+        # Now find the best characteristic to use
+        writable_chars = []
+        readable_chars = []
+        
+        for service in services:
+            # Skip generic Bluetooth services
+            service_uuid_str = str(service.uuid).lower()
+            if service_uuid_str.startswith('0000180') or service_uuid_str.startswith('0000181'):
+                continue  # Skip generic services
                 
-                # Look for writable characteristic
-                if 'write' in char.properties and not self.characteristic_uuid:
-                    self.characteristic_uuid = char.uuid
-                    logger.info(f"    -> Using characteristic for writing: {char.uuid}")
-                    
-                # Also check for readable/notify characteristics
+            for char in service.characteristics:
+                # Look for writable characteristics
+                if 'write' in char.properties or 'write-without-response' in char.properties:
+                    writable_chars.append((service.uuid, char.uuid, char.properties))
+                    logger.info(f"Found writable characteristic: {char.uuid}")
+                
+                # Look for readable/notify characteristics  
                 if 'read' in char.properties or 'notify' in char.properties:
-                    logger.info(f"    -> Available for reading/notifications: {char.uuid}")
+                    readable_chars.append((service.uuid, char.uuid, char.properties))
+                    logger.info(f"Found readable characteristic: {char.uuid}")
+        
+        # Set the first available writable characteristic
+        if writable_chars:
+            self.service_uuid = writable_chars[0][0]
+            self.characteristic_uuid = writable_chars[0][1]
+            logger.info(f"Using service: {self.service_uuid}")
+            logger.info(f"Using characteristic: {self.characteristic_uuid}")
+        elif readable_chars:
+            self.service_uuid = readable_chars[0][0]
+            self.characteristic_uuid = readable_chars[0][1]
+            logger.info(f"Using readable service: {self.service_uuid}")
+            logger.info(f"Using readable characteristic: {self.characteristic_uuid}")
+        else:
+            logger.error("No suitable characteristics found!")
+            
+        logger.info(f"Final characteristic UUID: {self.characteristic_uuid}")
     
     async def send_data(self, data, characteristic_uuid=None):
         """Send data to ESP32"""
@@ -104,8 +132,13 @@ class ESP32Controller:
             logger.error("Not connected to device")
             return False
         
+        if not self.characteristic_uuid and not characteristic_uuid:
+            logger.error("No characteristic UUID available for writing")
+            return False
+        
         try:
             char_uuid = characteristic_uuid or self.characteristic_uuid
+            logger.info(f"Using characteristic UUID: {char_uuid}")
             
             # Convert string to bytes if needed
             if isinstance(data, str):
@@ -117,6 +150,7 @@ class ESP32Controller:
             
         except Exception as e:
             logger.error(f"Failed to send data: {e}")
+            logger.error(f"Characteristic UUID was: {char_uuid}")
             return False
     
     async def read_data(self, characteristic_uuid=None):
@@ -125,14 +159,21 @@ class ESP32Controller:
             logger.error("Not connected to device")
             return None
         
+        if not self.characteristic_uuid and not characteristic_uuid:
+            logger.error("No characteristic UUID available for reading")
+            return None
+        
         try:
             char_uuid = characteristic_uuid or self.characteristic_uuid
+            logger.info(f"Reading from characteristic UUID: {char_uuid}")
+            
             data = await self.client.read_gatt_char(char_uuid)
             logger.info(f"Received data: {data}")
             return data
             
         except Exception as e:
             logger.error(f"Failed to read data: {e}")
+            logger.error(f"Characteristic UUID was: {char_uuid}")
             return None
     
     async def start_notifications(self, callback_func, characteristic_uuid=None):
