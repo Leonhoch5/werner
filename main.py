@@ -12,10 +12,10 @@ class BluetoothServer:
     def make_discoverable(self):
         """Make the device discoverable"""
         try:
-            # Make device discoverable and connectable
+            # Make device discoverable and connectable  
             subprocess.run(['sudo', 'hciconfig', 'hci0', 'up'], check=True)
             subprocess.run(['sudo', 'hciconfig', 'hci0', 'piscan'], check=True)
-            subprocess.run(['sudo', 'hciconfig', 'hci0', 'sspmode', '1'], check=True)
+            subprocess.run(['sudo', 'hciconfig', 'hci0', 'sspmode', '0'], check=True)  # Disable SSP for easier pairing
             print("Device is now discoverable")
             
             # Show MAC address
